@@ -13,8 +13,8 @@ CLOUD_VISION_ENDPOINT_URL = 'https://vision.googleapis.com/v1/images:annotate'
 from googleapiclient.discovery import build
 import pprint
 
-api_key = "YOUR_GOOGLE_API_KEY"
-cse_id = "YOUR_CUSTOM_GOOGLE_SEARCH_ENGINE_ID"
+api_key = "YOUR_API_KEY"
+cse_id = "CSE_ID"
 
 def google_search(search_term, api_key, cse_id, **kwargs):
     service = build("customsearch", "v1", developerKey=api_key)
@@ -75,19 +75,14 @@ def get_text_from_response(response):
     return (t['description'])
 
 def take_screenshot():
-    os.system("adb exec-out screencap -p > screen.png")
+    os.system("adb shell screencap -p /sdcard/screen.png")
+    os.system("adb pull /sdcard/screen.png")
 
 def split_screen_to_question_and_options():
     i = Image.open('screen.png')
     width, height = i.size
-    frame = i.crop(((0,400,width,650)))
+    frame = i.crop(((0,700,width,1800)))
     frame.save('question.png')
-    frame = i.crop(((0,650,width,750)))
-    frame.save('1.png')
-    frame = i.crop(((0,750,width,850)))
-    frame.save('2.png')
-    frame = i.crop(((0,850,width,1000)))
-    frame.save('3.png')
 
 
 option_names = ['A','B','C']
@@ -103,7 +98,7 @@ if __name__ == '__main__':
         a = raw_input("Wait for the next question and press Enter key instantly when it's displayed\n")
         take_screenshot()
         split_screen_to_question_and_options()
-        image_filenames = ['question.png','1.png','2.png','3.png']
+        image_filenames = ['question.png']
         response = request_ocr(api_key, image_filenames)
         if response.status_code != 200 or response.json().get('error'):
             print(response.text)
@@ -111,10 +106,21 @@ if __name__ == '__main__':
             responses = (response.json()['responses'])
             question = get_text_from_response(responses[0])
             question = re.sub('[^A-Za-z0-9\s]+', '', question)
-            options = [get_text_from_response(responses[1]),get_text_from_response(responses[2]),get_text_from_response(responses[3])]
+            nlines = question.count('\n')
+            q = question.split('\n')
+            for i in range(1,nlines-3):
+                q[0] = q[0] + " " + q[i]
+            options = ["","",""]
+            options[0] = q[nlines-3]
+            options[1] = q[nlines-2]
+            options[2] = q[nlines-1]
+            print(q[0])
+            print(options[0])
+            print(options[1])
+            print(options[2])            
             for idx,option in enumerate(options):
                 options[idx] = option.strip(' \t\n\r').lower()
-            normal = normal_scores(question,options)
+            normal = normal_scores(q[0],options)
             print_scores(normal,'Method 1 (Question search)')
-            withoption = scores_with_options(question,options)
+            withoption = scores_with_options(q[0],options)
             print_scores(withoption,'Method 2 (Question and options search)')
